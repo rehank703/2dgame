@@ -6,61 +6,33 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # 22.04 is the most stable for current Buildozer/P4A
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - name: Build APK with Buildozer Action
+        uses: ArtemSBulgakov/buildozer-action@v1.2.0
         with:
-          python-version: '3.11'
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk python3-pip autoconf \
-            libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
-            libtinfo5 cmake libffi-dev libssl-dev libltdl-dev
-
-      - name: Install Buildozer and Cython
-        run: |
-          pip install --upgrade pip
-          # Pin Cython to 0.29.33. Cython 3+ breaks the OpenSSL and pyjnius recipes!
-          pip install --user --upgrade buildozer "cython==0.29.33" virtualenv
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Prepare buildozer.spec
-        run: |
-          # 1. Check if the spec file exists. If not, create it.
-          if [ ! -f "buildozer.spec" ]; then
-            buildozer init
-          fi
-          
-          # 2. Modify requirements for your multiplayer game
-          sed -i 's/^requirements =.*/requirements = python3, kivy==2.3.0, openssl, requests, urllib3, certifi/' buildozer.spec
-          
-          # 3. Force API and NDK versions
-          sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-          sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
-          
-          # 4. Auto-accept SDK licenses
-          sed -i 's/^# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
-          sed -i 's/^android.accept_sdk_license =.*/android.accept_sdk_license = True/' buildozer.spec
-          
-          # 5. TURN ON DETAILED LOGGING (Level 2)
-          sed -i 's/^log_level =.*/log_level = 2/' buildozer.spec
-
-      - name: Build APK
-        run: |
-          # Removed 'yes |' to prevent the broken pipe masking the real error
-          buildozer android debug
+          # This specifically configures the environment for your Pygame code
+          command: |
+            [ ! -f buildozer.spec ] && buildozer init
+            # 1. Set requirements for Pygame + Networking
+            sed -i 's/^requirements =.*/requirements = python3, pygame, sdl2, sdl2_image, sdl2_ttf, sdl2_mixer/' buildozer.spec
+            # 2. Set permissions for WiFi Multiplayer
+            sed -i 's/^# android.permissions =.*/android.permissions = INTERNET, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE/' buildozer.spec
+            # 3. Use stable NDK for Clang compatibility
+            sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
+            sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
+            # 4. Final Build
+            buildozer -v android debug
+          repository_root: .
+          workdir: .
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Stable-Game-APK
+          name: Crown-Battle-APK
           path: bin/*.apk
