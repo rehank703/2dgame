@@ -14,18 +14,26 @@ jobs:
 
       - name: Build APK with Buildozer Action
         uses: ArtemSBulgakov/buildozer-action@v1.2.0
+        env:
+          # THIS FIXES THE 'CHOWN' ERROR
+          USER: root
         with:
-          # This specifically configures the environment for your Pygame code
           command: |
-            [ ! -f buildozer.spec ] && buildozer init
-            # 1. Set requirements for Pygame + Networking
-            sed -i 's/^requirements =.*/requirements = python3, pygame, sdl2, sdl2_image, sdl2_ttf, sdl2_mixer/' buildozer.spec
-            # 2. Set permissions for WiFi Multiplayer
+            # 1. Start fresh spec
+            [ -f buildozer.spec ] && rm buildozer.spec
+            buildozer init
+            
+            # 2. Inject your Pygame + Multiplayer requirements
+            sed -i 's/^requirements =.*/requirements = python3, pygame, sdl2, sdl2_image, sdl2_ttf, sdl2_mixer, openssl, requests/' buildozer.spec
+            
+            # 3. Add WiFi/Internet permissions for your socket code
             sed -i 's/^# android.permissions =.*/android.permissions = INTERNET, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE/' buildozer.spec
-            # 3. Use stable NDK for Clang compatibility
+            
+            # 4. Set stable NDK/API to avoid Clang crashes
             sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
             sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-            # 4. Final Build
+            
+            # 5. Build!
             buildozer -v android debug
           repository_root: .
           workdir: .
@@ -36,3 +44,4 @@ jobs:
         with:
           name: Crown-Battle-APK
           path: bin/*.apk
+          
