@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04 # Do not use 24.04; it is too strict for Buildozer
 
     steps:
       - name: Checkout Code
@@ -27,20 +27,21 @@ jobs:
 
       - name: Install Buildozer and Cython
         run: |
-          python -m pip install --upgrade pip
-          # Pinned Cython 0.29.33 is the most stable for Kivy + OpenSSL builds
-          pip install --user --upgrade buildozer "cython<3.0" virtualenv
+          # The 'break-system-packages' flag bypasses the PEP 668 error properly
+          pip install --upgrade pip
+          pip install --user --upgrade buildozer "cython<3.0" virtualenv --break-system-packages
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Build with Buildozer
+      - name: Build APK with Auto-Fix
         run: |
           export APP_ANDROID_ACCEPT_SDK_LICENSE=1
           
-          # Force settings for Multiplayer/Store stability
+          # Fix common spec mistakes for Multiplayer/Store automatically
           sed -i 's/^requirements =.*/requirements = python3, kivy==2.3.0, openssl, requests, urllib3, certifi/' buildozer.spec
           sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
+          sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
           
-          # Use 'android clean' instead of 'appclean'
+          # Force clean the build to avoid 'file not found' from previous attempts
           buildozer android clean
           buildozer -v android debug
         env:
@@ -50,6 +51,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Game-APK
+          name: Stable-Game-APK
           path: bin/*.apk
           
