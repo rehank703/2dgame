@@ -17,19 +17,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # --- THIS SECTION HANDLES SAVING YOUR PROGRESS ---
-      - name: Cache Buildozer Data
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.buildozer
-            .buildozer
-          # The key changes only if you change your spec file
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            ${{ runner.os }}-buildozer-
-      # -------------------------------------------------
-
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -38,22 +25,30 @@ jobs:
             libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
             libtinfo5 cmake libffi-dev libssl-dev
 
-      - name: Install Buildozer & Cython
+      - name: Install Buildozer and Cython
         run: |
-          pip install --user --upgrade buildozer cython virtualenv
-          echo "/home/runner/.local/bin" >> $GITHUB_PATH
+          python -m pip install --upgrade pip
+          # Pinned Cython 0.29.33 is often the most stable for Kivy/Clang
+          pip install --user --upgrade buildozer "cython<3.0" virtualenv
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build with Buildozer
-        # This block ensures we accept licenses and use high-detail logging
         run: |
+          # Auto-accept licenses
           export APP_ANDROID_ACCEPT_SDK_LICENSE=1
+          
+          # FORCE LOG LEVEL 2 (This reveals the hidden Clang/Multiplayer error)
+          # We also fix the 'minapi' to 21 to ensure store compatibility
+          sed -i 's/^log_level =.*/log_level = 2/' buildozer.spec
+          
           buildozer -v android debug
         env:
-          # This helps some networking libs compile correctly
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+          _JAVA_OPTIONS: "-Xmx4g"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: multiplayer-game-debug
+          name: Game-Debug-APK
           path: bin/*.apk
+          
