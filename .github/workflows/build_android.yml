@@ -28,24 +28,20 @@ jobs:
       - name: Install Buildozer and Cython
         run: |
           python -m pip install --upgrade pip
-          # Pinned Cython 0.29.33 is the gold standard for NDK r25b
+          # Pinned Cython 0.29.33 is the most stable for Kivy + OpenSSL builds
           pip install --user --upgrade buildozer "cython<3.0" virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build with Buildozer
         run: |
-          # 1. Accept SDK Licenses
           export APP_ANDROID_ACCEPT_SDK_LICENSE=1
           
-          # 2. FORCE correct settings into spec (prevents manual errors)
+          # Force settings for Multiplayer/Store stability
           sed -i 's/^requirements =.*/requirements = python3, kivy==2.3.0, openssl, requests, urllib3, certifi/' buildozer.spec
           sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
-          sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
-          sed -i 's/^log_level =.*/log_level = 2/' buildozer.spec
           
-          # 3. Clean and Build
-          # We run 'appclean' once to clear any corrupted Clang cache from the previous failed runs
-          buildozer android appclean
+          # Use 'android clean' instead of 'appclean'
+          buildozer android clean
           buildozer -v android debug
         env:
           _JAVA_OPTIONS: "-Xmx4g"
@@ -54,5 +50,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Game-Multiplayer-Debug
+          name: Game-APK
           path: bin/*.apk
+          
