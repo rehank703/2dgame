@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # Do not use 24.04; it is too strict for Buildozer
+    runs-on: ubuntu-22.04 # 22.04 is the most stable for current Buildozer/P4A
 
     steps:
       - name: Checkout Code
@@ -23,29 +23,53 @@ jobs:
           sudo apt-get install -y \
             git zip unzip openjdk-17-jdk python3-pip autoconf \
             libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
-            libtinfo5 cmake libffi-dev libssl-dev
+            libtinfo5 cmake libffi-dev libssl-dev libltdl-dev
 
       - name: Install Buildozer and Cython
         run: |
-          # The 'break-system-packages' flag bypasses the PEP 668 error properly
           pip install --upgrade pip
-          pip install --user --upgrade buildozer "cython<3.0" virtualenv --break-system-packages
+          # Kivy 2.3.0 + Python 3.11 works best with modern Cython 3.x
+          pip install --user --upgrade buildozer cython virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Build APK with Auto-Fix
+      - name: Cache Buildozer Global Directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-global-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-global-${{ runner.os }}-
+
+      - name: Cache Buildozer Local Directory
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-local-${{ runner.os }}-
+
+      - name: Prepare buildozer.spec
         run: |
-          export APP_ANDROID_ACCEPT_SDK_LICENSE=1
+          # 1. Check if the spec file exists. If not, create it to prevent sed from failing.
+          if [ ! -f "buildozer.spec" ]; then
+            buildozer init
+          fi
           
-          # Fix common spec mistakes for Multiplayer/Store automatically
+          # 2. Modify requirements for your multiplayer game
           sed -i 's/^requirements =.*/requirements = python3, kivy==2.3.0, openssl, requests, urllib3, certifi/' buildozer.spec
+          
+          # 3. Force API and NDK versions
           sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
           sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
           
-          # Force clean the build to avoid 'file not found' from previous attempts
-          buildozer android clean
-          buildozer -v android debug
-        env:
-          _JAVA_OPTIONS: "-Xmx4g"
+          # 4. Auto-accept SDK licenses directly in the spec file
+          sed -i 's/^# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+          sed -i 's/^android.accept_sdk_license =.*/android.accept_sdk_license = True/' buildozer.spec
+
+      - name: Build APK
+        run: |
+          # Piping 'yes' ensures any unexpected interactive prompts are automatically answered with 'y'
+          yes | buildozer -v android debug
 
       - name: Upload APK
         if: success()
@@ -53,4 +77,3 @@ jobs:
         with:
           name: Stable-Game-APK
           path: bin/*.apk
-          
