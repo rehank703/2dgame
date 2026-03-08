@@ -28,29 +28,13 @@ jobs:
       - name: Install Buildozer and Cython
         run: |
           pip install --upgrade pip
-          # Kivy 2.3.0 + Python 3.11 works best with modern Cython 3.x
-          pip install --user --upgrade buildozer cython virtualenv
+          # Pin Cython to 0.29.33. Cython 3+ breaks the OpenSSL and pyjnius recipes!
+          pip install --user --upgrade buildozer "cython==0.29.33" virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Cache Buildozer Global Directory
-        uses: actions/cache@v4
-        with:
-          path: ~/.buildozer
-          key: buildozer-global-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-global-${{ runner.os }}-
-
-      - name: Cache Buildozer Local Directory
-        uses: actions/cache@v4
-        with:
-          path: .buildozer
-          key: buildozer-local-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-local-${{ runner.os }}-
 
       - name: Prepare buildozer.spec
         run: |
-          # 1. Check if the spec file exists. If not, create it to prevent sed from failing.
+          # 1. Check if the spec file exists. If not, create it.
           if [ ! -f "buildozer.spec" ]; then
             buildozer init
           fi
@@ -62,14 +46,17 @@ jobs:
           sed -i 's/^android.ndk =.*/android.ndk = 25b/' buildozer.spec
           sed -i 's/^android.api =.*/android.api = 33/' buildozer.spec
           
-          # 4. Auto-accept SDK licenses directly in the spec file
+          # 4. Auto-accept SDK licenses
           sed -i 's/^# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
           sed -i 's/^android.accept_sdk_license =.*/android.accept_sdk_license = True/' buildozer.spec
+          
+          # 5. TURN ON DETAILED LOGGING (Level 2)
+          sed -i 's/^log_level =.*/log_level = 2/' buildozer.spec
 
       - name: Build APK
         run: |
-          # Piping 'yes' ensures any unexpected interactive prompts are automatically answered with 'y'
-          yes | buildozer -v android debug
+          # Removed 'yes |' to prevent the broken pipe masking the real error
+          buildozer android debug
 
       - name: Upload APK
         if: success()
