@@ -1,0 +1,59 @@
+name: Build Android APK
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # --- THIS SECTION HANDLES SAVING YOUR PROGRESS ---
+      - name: Cache Buildozer Data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          # The key changes only if you change your spec file
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-
+      # -------------------------------------------------
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk python3-pip autoconf \
+            libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libtinfo5 cmake libffi-dev libssl-dev
+
+      - name: Install Buildozer & Cython
+        run: |
+          pip install --user --upgrade buildozer cython virtualenv
+          echo "/home/runner/.local/bin" >> $GITHUB_PATH
+
+      - name: Build with Buildozer
+        # This block ensures we accept licenses and use high-detail logging
+        run: |
+          export APP_ANDROID_ACCEPT_SDK_LICENSE=1
+          buildozer -v android debug
+        env:
+          # This helps some networking libs compile correctly
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: multiplayer-game-debug
+          path: bin/*.apk
